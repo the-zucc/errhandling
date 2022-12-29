@@ -48,8 +48,27 @@ Sample format:
 		caused by: <some error>
 		caused by: <some error>
 		caused by: <some root error>
+
+Example usage:
+
+	func Example() handlederror.Error{
+		val, err := someFunctionCall()
+		if err != nil { // good old if err != nil
+			return handlederror.New("oops, something went wrong.", err)
+		}
+	}
+
+	var errMsg := Example().PrintableError() // this prints
 */
 func (e Error) PrintableError() string {
+	if se, ok := (*e.RootCause).(Error); ok {
+		return fmt.Sprintf(
+			"error:\n\t%s\n\nRoot cause:\n\t%s\n\nFull error trace:\n%s",
+			e.msg,
+			se.msg,
+			e.errorTrace(false),
+		)
+	}
 	return fmt.Sprintf(
 		"error:\n\t%s\n\nRoot cause:\n\t%s\n\nFull error trace:\n%s",
 		e.msg,
@@ -92,7 +111,7 @@ func (e Error) errorTrace(isCause bool) string {
 }
 
 // this instanciates a stackedError
-func NewError(msg string, cause ...error) error {
+func New(msg string, cause ...error) error {
 	returnedErr := new(error) // instantiate an error pointer
 	if len(cause) == 0 {      // if no cause was provided
 		*returnedErr = Error{ // set the error pointer's pointed value to a stackedError
@@ -105,7 +124,7 @@ func NewError(msg string, cause ...error) error {
 
 	// if we are here, a cause was provided
 	// if the cause is a stackedError
-	if hc, isCauseHandled := (cause[0]).(Error); isCauseHandled {
+	if hc, isCauseStacked := (cause[0]).(Error); isCauseStacked {
 		*returnedErr = Error{
 			msg:       msg,
 			RootCause: hc.RootCause,

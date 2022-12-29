@@ -2,7 +2,6 @@ package errhandling
 
 import (
 	"errors"
-	"fmt"
 
 	handlederr "github.com/the-zucc/errhandling/handled-err"
 )
@@ -15,7 +14,6 @@ func ErrHandling() {
 		panic(err)
 	}
 }
-
 
 func CheckErr[T any](val T, err error) func(*T, *error) T {
 	return func(t *T, errAddr *error) T {
@@ -32,35 +30,41 @@ func CheckErr[T any](val T, err error) func(*T, *error) T {
 WithCause returns a function that takes a format as parameter. That
 function, when called, will:
   - check for a non-nil error
-  - if non-nil, return an error decorated with the underlying error
-  - if the error is nil,
-
-describes the cause of the
+  - if non-nil, return the value and an error (with the provided message)
+    decorated with the underlying error as cause
+  - if the error is nil, return the value and the error
 */
-func WithCause[T any](val T, underlyingErr error) func(string) (T, error) {
+func WithCause[T any](val T, underlyingErr error) func(errMsg string) (v T, e error) {
 	// if error is nil
 	if underlyingErr == nil {
-		return func(s string) (T, error) {
+		return func(errMsg string) (T, error) {
 			return val, nil
 		}
 	}
-	// else, error is not nil
-	_, isRootError := underlyingErr.(error)
-	_, isHandledError := underlyingErr.(error)
+	return func(errMsg string) (T, error) {
+		return val, handlederr.New(
+			errMsg,
+			handlederr.New(
+				underlyingErr.Error(),
+			),
+		)
+	}
+}
 
-	// if error has not yet been handled
-	if !(isRootError || isHandledError) {
-		return func(errDesc string) (T, error) {
-			var re = fmt.Errorf("%s -> root cause: %s, %s", errDesc, underlyingErr, "%s")
-			return val, re // todo check this
-		}
-	} else if isRootError {
-		return func(errDesc string) (T, error) {
-			return val, nil // todo recheck this as well
+/*
+ReturnErr needs to be paired with a deferred call to ErrHandling().
+
+When called, it will return any non-nil error returned by the function
+call passed in the parameters.
+*/
+func ReturnErr[T any](val T, underlyingErr error) func(errAddr *error) T {
+	if underlyingErr != nil {
+		return func(errAddr *error) T {
+			*errAddr = underlyingErr
+			panic(nil)
 		}
 	}
-	// else if error has been handled
-	return func(errDesc string) (val T, returnedErr error) {
-		return val, fmt.Errorf("%s -> caused by: %s", errDesc, underlyingErr)
+	return func(errAddr *error) T {
+		return val
 	}
 }
