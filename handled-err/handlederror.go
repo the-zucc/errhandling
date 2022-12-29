@@ -1,4 +1,4 @@
-package handlederror
+package handlederr
 
 import "fmt"
 
@@ -25,8 +25,11 @@ following format:
 
 <some error> -> <some other error> -> some other error
 */
-func (he Error) Error() string {
-	return fmt.Sprintf("%s -> %s", *(he.Cause), he.msg)
+func (e Error) Error() string {
+	if e.Cause == nil {
+		return e.msg
+	}
+	return fmt.Sprintf("%s -> %s", *(e.Cause), e.msg)
 }
 
 /*
@@ -46,52 +49,53 @@ Sample format:
 		caused by: <some error>
 		caused by: <some root error>
 */
-func (he Error) PrintableError() string {
+func (e Error) PrintableError() string {
 	return fmt.Sprintf(
 		"error:\n\t%s\n\nRoot cause:\n\t%s\n\nFull error trace:\n%s",
-		he.msg,
-		*(he.RootCause),
-		he.errorTrace(false),
+		e.msg,
+		*(e.RootCause),
+		e.errorTrace(false),
 	)
 }
 
 /*
 This returns the error trace as a printable string
 */
-func (he Error) errorTrace(isCause bool) string {
+func (e Error) errorTrace(isCause bool) string {
 	// if he is a cause
 	if isCause {
 		// if he has a cause
-		if he.Cause != nil {
-			// is the cause a handledError?
-			if cause_, ok := (*he.Cause).(Error); ok {
+		if e.Cause != nil {
+			// is the cause a stackedError?
+			if cause_, ok := (*e.Cause).(Error); ok {
 				// if it is, include its stack trace in the returned message
-				return fmt.Sprintf("\tcaused by: %s\n%s", he.msg, cause_.errorTrace(true))
+				return fmt.Sprintf("\tcaused by: %s\n%s", e.msg, cause_.errorTrace(true))
 			}
-			// if not a handledError, return the normal message, decorated.
-			return fmt.Sprintf("\tcaused by: %s\n\tcaused by: %s", he.msg, *he.Cause)
+			// if not a stackedError, return the normal message, decorated.
+			return fmt.Sprintf("\tcaused by: %s\n\tcaused by: %s", e.msg, *e.Cause)
 		}
+		return fmt.Sprintf("\tcaused by: %s", e.msg)
 	}
 
 	// if we are here, then he is not a cause.
 	// if he *has* a cause
-	if he.Cause != nil {
-		// is the cause a handledError?
-		if cause_, ok := (*he.Cause).(Error); ok {
+	if e.Cause != nil {
+		// is the cause a stackedError?
+		if cause_, ok := (*e.Cause).(Error); ok {
 			// if it is, include its stack trace in the returned message
-			return fmt.Sprintf("\t%s\n\tcaused by: %s", he.msg, cause_.errorTrace(true))
+			return fmt.Sprintf("\t%s\n%s", e.msg, cause_.errorTrace(true))
 		}
-		// if not a handledError, return the normal message, decorated.
-		return fmt.Sprintf("\t%s\n\tcaused by: %s", he.msg, *(he.Cause))
+		// if not a stackedError, return the normal message, decorated.
+		return fmt.Sprintf("\t%s\n\tcaused by: %s", e.msg, *(e.Cause))
 	}
-	return fmt.Sprintf("caused by: %s", he.msg)
+	return fmt.Sprintf("\t%s", e.msg)
 }
 
-// this instanciates a handledError
-func HandledError(msg string, cause ...error) error {
+// this instanciates a stackedError
+func NewError(msg string, cause ...error) error {
 	returnedErr := new(error) // instantiate an error pointer
 	if len(cause) == 0 {      // if no cause was provided
-		*returnedErr = Error{ // set the error pointer's pointed value to a handledError
+		*returnedErr = Error{ // set the error pointer's pointed value to a stackedError
 			msg:       msg,
 			RootCause: returnedErr,
 			Cause:     nil, // this error has no cause, it's a root cause
@@ -100,7 +104,7 @@ func HandledError(msg string, cause ...error) error {
 	}
 
 	// if we are here, a cause was provided
-	// if the cause is a handledError
+	// if the cause is a stackedError
 	if hc, isCauseHandled := (cause[0]).(Error); isCauseHandled {
 		*returnedErr = Error{
 			msg:       msg,

@@ -1,18 +1,32 @@
 package errhandling
 
-import "fmt"
+import (
+	"errors"
+	"fmt"
 
-func Catch() {
+	handlederr "github.com/the-zucc/errhandling/handled-err"
+)
+
+func ErrHandling() {
 	if err := recover(); err != nil {
+		if he, ok := err.(handlederr.Error); ok {
+			panic(errors.New(he.PrintableError()))
+		}
 		panic(err)
 	}
 }
 
-/*
-func RetErr[T any](err error) T {
 
+func CheckErr[T any](val T, err error) func(*T, *error) T {
+	return func(t *T, errAddr *error) T {
+		if err != nil {
+			*t = val
+			*errAddr = err
+			panic(nil)
+		}
+		return val
+	}
 }
-*/
 
 /*
 WithCause returns a function that takes a format as parameter. That
