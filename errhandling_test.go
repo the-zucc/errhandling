@@ -6,80 +6,72 @@ import (
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
+
 	. "github.com/the-zucc/errhandling"
-	handlederr "github.com/the-zucc/errhandling/handled-err"
+	errstack "github.com/the-zucc/errhandling/err-stack"
 )
+
+const SAMPLE_STRING = "Hello world!"
+const ROOT_ERROR = "some error occurred"
 
 func TestErrHandling(t *testing.T) {
 	RegisterFailHandler(Fail)
-	RunSpecs(t, "errhandling tests")
+	RunSpecs(t, "errhandling2 tests")
 }
 
-func testFunctionNoErr() (string, error) {
-	return "", nil
-}
-
-const ROOT_ERROR = "some error occurred"
-
-func testFunctionErr() (string, error) {
-	return "", errors.New(ROOT_ERROR)
-}
-
-type someErrorType error
-
-var _ = Describe("errhandling tests", func() {
-	It("the base assumptions needed for this framework to work", func() {
-		Expect(func(cause ...error) bool {
-			return cause == nil
-		}()).To(BeTrue())
-	})
-	It("StackedError() should work properly", func() {
-		// a root error
-		e1 := handlederr.New("some root error")
-		he1, ok := e1.(handlederr.Error)
-		Expect(ok).To(BeTrue())
-
-		// an error with a cause
-		e2 := handlederr.New("some caused error", he1)
-		_, ok = e2.(handlederr.Error)
-		Expect(ok).To(BeTrue())
-	})
-	It("Error.Error() should work properly", func() {
-		someError := "some error"
-		someOtherError := "some other error"
-		e1 := handlederr.New(someError)
-		e2 := handlederr.New(someOtherError, e1)
-		Expect(e1.Error()).To(Equal(someError))
-		Expect(e2.Error()).To(Equal(someError + " -> " + someOtherError))
-	})
-	It("Error.PrintableError() should work properly", func() {
-		e1 := handlederr.New("some root error")
-		e2 := handlederr.New("some caused error", e1)
-		he2, ok := e2.(handlederr.Error)
-		Expect(ok).To(BeTrue())
-		pe := he2.PrintableError()
-		Expect(pe).To(Equal(
-			"error:\n\tsome caused error\n\nRoot cause:\n\tsome root error\n\nFull error trace:\n\tsome caused error\n\tcaused by: some root error",
-		))
-	})
-
-	It("WithCause should return a StackedError", func() {
-		errMsg := "oopsies"
-		err := func() (e error) {
-			defer ErrHandling()
-			ReturnErr(WithCause(testFunctionErr())(errMsg))(&e)
-			return nil
+var _ = Describe("errhandling2 tests", func() {
+	It("CatchVal() should work properly for Return()", func() {
+		str, err := func() (s string, e error) {
+			defer CatchVal(&s, &e)
+			func() {
+				Return("some string", errors.New("oopsie"))
+			}()
+			return "", nil
 		}()
-		he, ok := err.(handlederr.Error)
+		Expect(str).To(Equal("some string"))
+		Expect(err.Error()).To(Equal("oopsie"))
+	})
+	It("CatchVal() should work properly for Throw()", func() {
+		str, err := func() (s string, e error) {
+			defer CatchVal(&s, &e)
+			func() {
+				Throw(errors.New("oopsie"))
+			}()
+			return "", nil
+		}()
+		Expect(str).To(Equal(""))
+		Expect(err.Error()).To(Equal("oopsie"))
+	})
+	It("CatchVal() should work properly for a panic on a errstack.Error", func() {
+		var e error
+		func() {
+			defer func() {
+				if err := recover(); err != nil {
+					if err, ok := err.(error); ok {
+						e = err
+					}
+				}
+			}()
+			func() (s string, e error) {
+				defer CatchVal(&s, &e)
+				func() {
+					panic(errstack.New("oops !", errors.New(ROOT_ERROR)))
+				}()
+				return "", nil
+			}()
+		}()
+		Expect(e).NotTo(BeNil())
+	})
+	It("Catch() should return an errstack.Error for Return()", func() {
+		str, err := func() (s string, e error) {
+			defer CatchVal(&s, &e)
+			func() { Return(SAMPLE_STRING, errors.New("oops !")) }()
+			return "", nil
+		}()
+
+		Expect(str).To(Equal(SAMPLE_STRING))
+		Expect(err).NotTo(BeNil())
+		_, ok := err.(errstack.Error)
 		Expect(ok).To(BeTrue())
-		pe := he.PrintableError()
-		Expect(pe).To(Equal(
-			"error:\n\t" + errMsg +
-				"\n\nRoot cause:\n\t" +
-				ROOT_ERROR +
-				"\n\nFull error trace:\n\t" +
-				errMsg +
-				"\n\tcaused by: " + ROOT_ERROR,
-		))
 	})
 })

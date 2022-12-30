@@ -1,4 +1,4 @@
-package handlederr
+package errstack
 
 import "fmt"
 
@@ -17,6 +17,10 @@ type Error struct {
 	Cause     *error // the underlying cause of the error
 }
 
+func (e Error) Msg() string {
+	return e.msg
+}
+
 /*
 Returns the error message of this error (this comes straight
 
@@ -26,6 +30,7 @@ following format:
 <some error> -> <some other error> -> some other error
 */
 func (e Error) Error() string {
+	// TODO check if this should only return e.msg instead. Seems logical.
 	if e.Cause == nil {
 		return e.msg
 	}
