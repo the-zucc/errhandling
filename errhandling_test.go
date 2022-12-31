@@ -22,7 +22,7 @@ func TestErrHandling(t *testing.T) {
 var _ = Describe("errhandling2 tests", func() {
 	It("CatchVal() should work properly for Return()", func() {
 		str, err := func() (s string, e error) {
-			defer CatchVal(&s, &e)
+			defer Catch(&s, &e)
 			func() {
 				Return("some string", errors.New("oopsie"))
 			}()
@@ -33,9 +33,9 @@ var _ = Describe("errhandling2 tests", func() {
 	})
 	It("CatchVal() should work properly for Throw()", func() {
 		str, err := func() (s string, e error) {
-			defer CatchVal(&s, &e)
+			defer Catch(&s, &e)
 			func() {
-				Throw(errors.New("oopsie"))
+				Return_(errors.New("oopsie"))
 			}()
 			return "", nil
 		}()
@@ -53,7 +53,7 @@ var _ = Describe("errhandling2 tests", func() {
 				}
 			}()
 			func() (s string, e error) {
-				defer CatchVal(&s, &e)
+				defer Catch(&s, &e)
 				func() {
 					panic(errstack.New("oops !", errors.New(ROOT_ERROR)))
 				}()
@@ -62,10 +62,16 @@ var _ = Describe("errhandling2 tests", func() {
 		}()
 		Expect(e).NotTo(BeNil())
 	})
-	It("Catch() should return an errstack.Error for Return()", func() {
+	It("Catch() should return an errstack.Error for Return(WithCause())", func() {
 		str, err := func() (s string, e error) {
-			defer CatchVal(&s, &e)
-			func() { Return(SAMPLE_STRING, errors.New("oops !")) }()
+			defer Catch(&s, &e)
+			func() {
+				Return(
+					WithCause(
+						SAMPLE_STRING, errors.New("oops !"),
+					)("some error occurred"),
+				)
+			}()
 			return "", nil
 		}()
 
